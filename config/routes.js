@@ -22,9 +22,7 @@ module.exports = function (app) {
   });
 
 
-  app.post('/', transactions.create, transactions.analyze, function(req,res){
-    res.send('done')
-  })
+  app.post('/', transactions.analyze, transactions.get)
 //  app.get('/', transactions.show)
 
 

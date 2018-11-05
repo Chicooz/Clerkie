@@ -7,14 +7,14 @@
 const mongoose = require('mongoose'),
   Schema = mongoose.Schema,
 
-  TransactionSchema = new Schema({
-    trans_id:{type:String, default:''},
-    user_id:{type:String, default:''},
+  RecurringTransactionSchema = new Schema({
     name:{type:String, default:''},
-    amount:Number,
-    date:{type:Date},
-    analyzed:{type:Boolean, default:false},
-    is_recurring:Boolean,
+    user_id:{type:String, default:''},
+    next_amt:Number,
+    next_date:{type:Date},
+    transactions:[{type:Schema.ObjectId, ref:'Transaction'}],
+    interval:Number,
+    is_active:Boolean,
     dateCreated:{type:Date, default:Date.now}
   });
 
@@ -24,7 +24,7 @@ const mongoose = require('mongoose'),
  * Pre-save hook
  */
 
-TransactionSchema.pre('save', function (next) {
+RecurringTransactionSchema.pre('save', function (next) {
   next();
 });
 
@@ -34,7 +34,7 @@ TransactionSchema.pre('save', function (next) {
  * Methods
  */
 
-TransactionSchema.methods = {
+RecurringTransactionSchema.methods = {
 
   
 };
@@ -43,7 +43,7 @@ TransactionSchema.methods = {
  * Statics
  */
 
-TransactionSchema.statics = {
+RecurringTransactionSchema.statics = {
 
   /**
    * Load
@@ -82,4 +82,4 @@ TransactionSchema.statics = {
   }
 };
 
-mongoose.model('Transaction', TransactionSchema);
+mongoose.model('RecurringTransaction', RecurringTransactionSchema);

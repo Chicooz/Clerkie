@@ -6,95 +6,84 @@
     RecurringTransaction = mongose.model("RecurringTransaction");
 
 
-//https://stackoverflow.com/questions/7763327/how-to-calculate-date-difference-in-javascript
-// provides dateDiff in dayes, weeks, months and years 
-const dateDiff = {
-    inDays: function(d1, d2) {
-        var t2 = d2.getTime();
-        var t1 = d1.getTime();
-
-        return parseInt((t2-t1)/(24*3600*1000));
-    },
-
-    inWeeks: function(d1, d2) {
-        var t2 = d2.getTime();
-        var t1 = d1.getTime();
-
-        return parseInt((t2-t1)/(24*3600*1000*7));
-    },
-
-    inMonths: function(d1, d2) {
-        var d1Y = d1.getFullYear();
-        var d2Y = d2.getFullYear();
-        var d1M = d1.getMonth();
-        var d2M = d2.getMonth();
-
-        return (d2M+12*d2Y)-(d1M+12*d1Y);
-    },
-
-    inYears: function(d1, d2) {
-        return d2.getFullYear()-d1.getFullYear();
-    }
-}
 
 
 exports.scanTransactions = function(transactions,cb){
     const matchTransactions = function(transaction, cb){
-        console.log(transaction.date,'date')
+        // amount percentage calculation
         const gt = transaction.amount > 0 ? (transaction.amount * (100-percentage))/100 : (transaction.amount * (100+percentage))/100;
         const lt = transaction.amount > 0 ? (transaction.amount * (100+percentage))/100 : (transaction.amount * (100-percentage))/100;
-
+        let processed = false;
         async.auto({
             save:function(cb){
-                Transaction.update({trans_id:transaction.trans_id}, transaction, {upsert:true}, cb);
+                // upsert the transaction
+                Transaction.update({trans_id:transaction.trans_id, user_id:transaction.user_id}, transaction, {upsert:true}, cb);
             },
-            matches:['save',function(results,cb){
-                RecurringTransaction.find({user:transaction.user_id, amount:{$gt:gt, $lt:lt}}).sort({date:1}).exec(cb);      
+            record:['save', function(results, cb){
+                Transaction.findOne({trans_id:transaction.trans_id, user_id:transaction.user_id}).exec(cb);
+            }],
+            matches:['record',function(results,cb){
+                // match againest known transactions
+                RecurringTransaction.find({user_id:transaction.user_id, next_amt:{$gte:gt, $lte:lt}}).sort({date:1}).exec(cb);      
             }],
             add:['matches', function(results,cb){
                 if(results.matches.length){
+
+                    console.log(results.find)
+                    // filter recurring that match vendor and expected date 
                     const matchedRecurring = results.matches.filter(function(o){
-                        return matchVendors(transaction.name, match.name)  && matchApproximateInterval(transaction.date, match.next_date );
-                    })
+
+                        return matchVendors(transaction.name, o.name)  && matchApproximateInterval(new Date(transaction.date), o.next_date );
+                    });
                     console.log(matchedRecurring)
                     var match = matchedRecurring.length ? matchedRecurring[0] : null;
                         if(match){
-                            match.transactions.addToSet(transaction);
+                            processed = true;
+                            match.transactions.addToSet(results.record);
                             match.name = transaction.name;
-                            match.next_date = getNextDate();
+                            match.next_date = getNextDate(transaction.date, match.interval);
                             return match.save(cb);                            
+                        }else{
+                            cb();
                         }
                 }else{
+                    cb()
+                }
+            }],
+            new:['add', function(results,cb){
+                if(!processed){
                     // transaction didnt pass previously known recurring transactions, check for 2 more similar transactions in the same interval
-// thursday 8 , 1pm 
-// 31 omar beker st, of osman bn affan 'behind military acady 2nd floor office 102 idp '
                     Transaction.find({ user_id: transaction.user_id, amount:{'$gte':gt, '$lte':lt}}).sort({date:1}).exec(function (err, transactions) {
                         if(err){
                             return cb(err);
                         }
-                        if(transactions.length >1){
+                        if(transactions.length >2){
                             var filtered = transactions.filter(function(trans){
-                                if(transaction.trans_id == trans.trans_id){
-                                    transaction = trans;
-                                }
+                                
                                 return matchVendors(transaction.name, trans.name)  && transaction.trans_id !== trans.trans_id;
                             })
-                            if(filtered.length > 1){
-                                let matched = matchInterval(transaction, filtered, cb);
+                            if(filtered.length > 2){
+                                // found 3 or more matched transactions, send to match and process
+                                let matched = matchInterval(results.record, filtered, cb);
                             }else{
+                            // if not matched then nothing to report
                                 cb();
                             }
                         }else{
+                            // if not found then nothing to report
                          cb();   
                         }
                     });
+                }else{
+                    // already processed as recurring
+                    cb();
                 }
             }]
         }, cb);
     };
-    // sort new transactions by date old -> new 
+    // 1- sort new transactions by date old -> new 
     transactions.sort((a, b) => a.date >= b.date);
-    // process one transaction at the time 
+    // 2- process one transaction at the time 
     async.forEachLimit(transactions,1, function(transaction, cb){         
         return matchTransactions(transaction,  cb);
     }, cb);
@@ -118,7 +107,7 @@ const matchInterval = function(transaction, filtered, cb){
                 transactions.push(filtered[i]);
             }
         }else{
-            interval = dateDiff.inDays(filtered[i].date, new Date(transaction.date)); // assuming first element i recurring with current transaction
+            interval = dateDiff.inDays(filtered[i].date, new Date(transaction.date)); 
             transactions.push(filtered[i]);
         }
         if(i+1 == filtered.length){
@@ -163,4 +152,35 @@ const matchVendors = function(vendor1,vendor2){
         return false;
     }
 
+}
+
+//https://stackoverflow.com/questions/7763327/how-to-calculate-date-difference-in-javascript
+// provides dateDiff in dayes, weeks, months and years 
+const dateDiff = {
+    inDays: function(d1, d2) {
+        var t2 = d2.getTime();
+        var t1 = d1.getTime();
+
+        return parseInt((t2-t1)/(24*3600*1000));
+    },
+
+    inWeeks: function(d1, d2) {
+        var t2 = d2.getTime();
+        var t1 = d1.getTime();
+
+        return parseInt((t2-t1)/(24*3600*1000*7));
+    },
+
+    inMonths: function(d1, d2) {
+        var d1Y = d1.getFullYear();
+        var d2Y = d2.getFullYear();
+        var d1M = d1.getMonth();
+        var d2M = d2.getMonth();
+
+        return (d2M+12*d2Y)-(d1M+12*d1Y);
+    },
+
+    inYears: function(d1, d2) {
+        return d2.getFullYear()-d1.getFullYear();
+    }
 }

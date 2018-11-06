@@ -14,7 +14,6 @@ const mongoose = require('mongoose'),
     amount:Number,
     date:{type:Date},
     analyzed:{type:Boolean, default:false},
-    is_recurring:Boolean,
     dateCreated:{type:Date, default:Date.now}
   });
 

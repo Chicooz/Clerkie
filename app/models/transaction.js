@@ -13,8 +13,8 @@ const mongoose = require('mongoose'),
     name:{type:String, default:''},
     amount:Number,
     date:{type:Date},
-    analyzed:{type:Boolean, default:false},
-    dateCreated:{type:Date, default:Date.now}
+    dateCreated:{type:Date, default:Date.now},
+    dateUpdated:{type:Date}
   });
 
 

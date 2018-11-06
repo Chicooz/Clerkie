@@ -14,7 +14,6 @@ const mongoose = require('mongoose'),
     next_date:{type:Date},
     transactions:[{type:Schema.ObjectId, ref:'Transaction'}],
     interval:Number,
-    is_active:Boolean,
     dateCreated:{type:Date, default:Date.now}
   });
 

@@ -9,37 +9,32 @@
 
 
 exports.scanTransactions = function(transactions,cb){
-    const matchTransactions = function(transaction, cb){
+    const matchTransactions = function(transactionId, cb){
         // amount percentage calculation
-        const gt = transaction.amount > 0 ? (transaction.amount * (100-percentage))/100 : (transaction.amount * (100+percentage))/100;
-        const lt = transaction.amount > 0 ? (transaction.amount * (100+percentage))/100 : (transaction.amount * (100-percentage))/100;
         let processed = false;
         async.auto({
-            save:function(cb){
-                // upsert the transaction
-                Transaction.update({trans_id:transaction.trans_id, user_id:transaction.user_id}, transaction, {upsert:true}, cb);
+            transaction:function(cb){
+                Transaction.findOne({_id:transactionId}).exec(cb);
             },
-            record:['save', function(results, cb){
-                Transaction.findOne({trans_id:transaction.trans_id, user_id:transaction.user_id}).exec(cb);
-            }],
-            matches:['record',function(results,cb){
+            matches:['transaction',function(results,cb){
+                const transaction = results.transaction
+                , gt = transaction.amount > 0 ? (transaction.amount * (100-percentage))/100 : (transaction.amount * (100+percentage))/100
+                , lt = transaction.amount > 0 ? (transaction.amount * (100+percentage))/100 : (transaction.amount * (100-percentage))/100;
+
                 // match againest known transactions
                 RecurringTransaction.find({user_id:transaction.user_id, next_amt:{$gte:gt, $lte:lt}}).sort({date:1}).exec(cb);      
             }],
             add:['matches', function(results,cb){
+                const transaction = results.transaction;
                 if(results.matches.length){
-
-                    console.log(results.find)
                     // filter recurring that match vendor and expected date 
                     const matchedRecurring = results.matches.filter(function(o){
-
                         return matchVendors(transaction.name, o.name)  && matchApproximateInterval(new Date(transaction.date), o.next_date );
                     });
-                    console.log(matchedRecurring)
                     var match = matchedRecurring.length ? matchedRecurring[0] : null;
                         if(match){
                             processed = true;
-                            match.transactions.addToSet(results.record);
+                            match.transactions.addToSet(results.transaction);
                             match.name = transaction.name;
                             match.next_date = getNextDate(transaction.date, match.interval);
                             return match.save(cb);                            
@@ -51,6 +46,9 @@ exports.scanTransactions = function(transactions,cb){
                 }
             }],
             new:['add', function(results,cb){
+                const transaction = results.transaction                
+                , gt = transaction.amount > 0 ? (transaction.amount * (100-percentage))/100 : (transaction.amount * (100+percentage))/100
+                , lt = transaction.amount > 0 ? (transaction.amount * (100+percentage))/100 : (transaction.amount * (100-percentage))/100;
                 if(!processed){
                     // transaction didnt pass previously known recurring transactions, check for 2 more similar transactions in the same interval
                     Transaction.find({ user_id: transaction.user_id, amount:{'$gte':gt, '$lte':lt}}).sort({date:1}).exec(function (err, transactions) {
@@ -59,18 +57,17 @@ exports.scanTransactions = function(transactions,cb){
                         }
                         if(transactions.length >2){
                             var filtered = transactions.filter(function(trans){
-                                
                                 return matchVendors(transaction.name, trans.name)  && transaction.trans_id !== trans.trans_id;
                             })
                             if(filtered.length > 2){
                                 // found 3 or more matched transactions, send to match and process
-                                let matched = matchInterval(results.record, filtered, cb);
+                                let matched = matchInterval(results.transaction, filtered, cb);
                             }else{
-                            // if not matched then nothing to report
+                            // if not enough matched then nothing to report
                                 cb();
                             }
                         }else{
-                            // if not found then nothing to report
+                            // if not enough found then nothing to report
                          cb();   
                         }
                     });
@@ -85,7 +82,16 @@ exports.scanTransactions = function(transactions,cb){
     transactions.sort((a, b) => a.date >= b.date);
     // 2- process one transaction at the time 
     async.forEachLimit(transactions,1, function(transaction, cb){         
-        return matchTransactions(transaction,  cb);
+        
+        Transaction.update({trans_id:transaction.trans_id, user_id:transaction.user_id}, transaction, {upsert:true}, function(err,upsert){
+            if(upsert.upserted){
+                // new transaction 
+                return matchTransactions(upsert.upserted[0]._id,  cb);
+            }else{
+                // transaction is duplicate no need to reprocess
+                return cb();
+            }
+        });
     }, cb);
 }
 function getNextDate(date, days) {

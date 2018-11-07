@@ -9,6 +9,7 @@ const extend = require('util')._extend;
 
 const development = require('./env/development');
 const production = require('./env/production');
+const test = require('./env/test');
 
 const notifier = {
   service: 'postmark',
@@ -30,6 +31,6 @@ const defaults = {
 
 module.exports = {
   development: extend(development, defaults),
-  production: extend(production, defaults)
+  production: extend(production, defaults),
+  test: extend(test, defaults)
 }[process.env.NODE_ENV || 'development'];
-console.log(process.env.NODE_ENV||'development');

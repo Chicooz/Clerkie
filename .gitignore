@@ -1,5 +1,5 @@
 node_modules/
-
+.nyc_output/
 # Elastic Beanstalk Files
 .elasticbeanstalk/*
 !.elasticbeanstalk/*.cfg.yml

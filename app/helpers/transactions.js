@@ -59,7 +59,7 @@ exports.scanTransactions = function(transactions,cb){
                             var filtered = transactions.filter(function(trans){
                                 return matchVendors(transaction.name, trans.name)  && transaction.trans_id !== trans.trans_id;
                             })
-                            if(filtered.length > 2){
+                            if(filtered.length >1){
                                 // found 3 or more matched transactions, send to match and process
                                 let matched = matchInterval(results.transaction, filtered, cb);
                             }else{

@@ -1,5 +1,6 @@
     const mongose = require("mongoose"),
- 	demoData = require('../../../config').demoData,
+    demoData = require('../../../config').demoData,
+ 	recurringDateLimit = require('../../../config').recurringDateLimit,
     RecurringTransaction = mongose.model("RecurringTransaction");
 
 
@@ -8,7 +9,14 @@
     		if(err){
     			res.status(500).jsonp(err);
     		}else{
-    			res.jsonp(recurring)
+                const filtered = recurring.filter(function(rec){
+                    let day = new Date();
+                    day.setDate(day.getDate() + recurringDateLimit);
+                    if(rec.next_date >= day){
+                        return true;
+                    }
+                });
+    			res.jsonp(filtered);
     		}
     	})
     } 

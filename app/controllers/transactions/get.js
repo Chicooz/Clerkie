@@ -11,10 +11,8 @@
     		}else{
                 const filtered = recurring.filter(function(rec){
                     let day = new Date();
-                    day.setDate(day.getDate() + recurringDateLimit);
-                    if(rec.next_date >= day){
-                        return true;
-                    }
+                    day.setDate(day.getDate() - recurringDateLimit);
+                    return rec.next_date >= day
                 });
     			res.jsonp(filtered);
     		}
